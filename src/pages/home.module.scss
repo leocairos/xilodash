@@ -1,0 +1,23 @@
+.contentContainer {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 2rem;
+  height: calc(100vh - 5rem);
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.main {
+  max-width: 600px;
+  align-items: center;
+  justify-content: start;
+
+  span {
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+
+
+}
