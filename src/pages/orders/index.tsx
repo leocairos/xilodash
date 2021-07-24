@@ -123,20 +123,32 @@ const LayoutFlow = ({elementsFlow}: IPropsLayoutFlow) => {
   );
 };
 
+const backgroundNodeColor = (centroCusto: string) => {
+  switch (centroCusto.substr(0, 3)) {
+    case '031': return  '#90CDF4'; //Mineracao 031
+    case '032': return  '#4299E1'; //Tratamento de Minerio 032
+    case '033': return  '#2B6CB0'; //Moagem de Talco 033
+    case '034': return  '#2A4365'; //Moagem de Magnesita 034
+    case '036': return  '#0BC5EA'; //Forno MHF 036
+  }
+}
+
 export const getServerSideProps: GetServerSideProps = async ( { req, params }) => {
   const response = await api.get(`/order?anoMes=202105`);
   const { resumoOPList } = response.data;
 
   const orders = resumoOPList as IOrderSummary[]
   const elementsFlow = orders
-    .filter(order => ['PA', 'PI', 'MP'].includes(order.Tipo))
+    .filter(
+      item => ['PA', 'PI', 'MP'].includes(item.Tipo),
+    )
     .map( item => ({
       id: item.Produto,
-      data: { label: `${item.Descricao}` },
+      data: { label: `${item.Produto} ${item.Descricao}` },
       position: { x: 0, y: 0 },
-    }));
-
-  const filteredArr = elementsFlow.reduce((acc, current) => {
+      style: { background: `${backgroundNodeColor(item.CC)}`, color: '#333'},
+    }))
+    .reduce((acc, current) => {
       const x = acc.find(item => item.id === current.id);
       if (!x) {
         return acc.concat([current]);
@@ -157,7 +169,7 @@ export const getServerSideProps: GetServerSideProps = async ( { req, params }) =
 
   return {
     props: {
-      elementsFlow: [...filteredArr, ...edgeFlow]
+      elementsFlow: [...elementsFlow, ...edgeFlow]
     }
   }
 }
