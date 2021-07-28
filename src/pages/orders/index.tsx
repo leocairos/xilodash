@@ -5,9 +5,11 @@ import ReactFlow, {
   removeElements,
   Controls,
   isNode,
+  Background,
   Elements,
   Connection,
   Edge,
+  MiniMap,
   NodeExtent,
   Position,
   XYPosition
@@ -56,9 +58,10 @@ interface IOrderSummary {
 
 interface IPropsLayoutFlow {
   elementsFlow: Elements;
+  yearMonth: string;
 }
 
-const LayoutFlow = ({elementsFlow}: IPropsLayoutFlow) => {
+const LayoutFlow = ({elementsFlow, yearMonth}: IPropsLayoutFlow) => {
   const [elements, setElements] = useState<Elements>(initialElements);
   const onConnect = (params: Connection | Edge) => setElements((els) => addEdge(params, els));
   const onElementsRemove = (elementsToRemove: Elements) => setElements((els) => removeElements(elementsToRemove, els));
@@ -73,7 +76,7 @@ const LayoutFlow = ({elementsFlow}: IPropsLayoutFlow) => {
 
     elements.forEach((el) => {
       if (isNode(el)) {
-        dagreGraph.setNode(el.id, { width: 250, height: 150 });
+        dagreGraph.setNode(el.id, { width: 250, height: 250 });
       } else {
         dagreGraph.setEdge(el.source, el.target);
       }
@@ -111,8 +114,13 @@ const LayoutFlow = ({elementsFlow}: IPropsLayoutFlow) => {
           onLoad={() => onLayout('TB')}
         >
           <Controls />
+          <MiniMap />
+          <Background />
         </ReactFlow>
         <div className={styles.controls}>
+          Período: <button style={{ marginRight: 10 }}>{`<`}</button>
+          {yearMonth}
+          <button style={{ marginRight: 10, marginLeft: 10 }}>{`>`}</button>
           <button onClick={() => onLayout('TB')} style={{ marginRight: 10 }}>
             vertical layout
           </button>
@@ -128,14 +136,26 @@ const backgroundNodeColor = (centroCusto: string) => {
     case '031': return  '#90CDF4'; //Mineracao 031
     case '032': return  '#4299E1'; //Tratamento de Minerio 032
     case '033': return  '#2B6CB0'; //Moagem de Talco 033
-    case '034': return  '#2A4365'; //Moagem de Magnesita 034
+    case '034': return  '#385072'; //Moagem de Magnesita 034
     case '036': return  '#0BC5EA'; //Forno MHF 036
   }
 }
 
 export const getServerSideProps: GetServerSideProps = async ( { req, params }) => {
-  const response = await api.get(`/order?anoMes=202105`);
-  const { resumoOPList } = response.data;
+  var dateQuery = new Date();
+  var resumoOPList = [];
+  var month = String(dateQuery.getMonth() + 1).padStart(2, '0')
+  var year = dateQuery.getFullYear();
+
+  while (resumoOPList.length<1) {
+    const response = await api.get(`/order?anoMes=${year}${month}`);
+    resumoOPList = response.data.resumoOPList;
+    if (resumoOPList.length<1) {
+      dateQuery = new Date(dateQuery.setMonth(dateQuery.getMonth() - 1));
+      month = String(dateQuery.getMonth() + 1).padStart(2, '0');
+      year = dateQuery.getFullYear();
+    }
+  }
 
   const orders = resumoOPList as IOrderSummary[]
   const elementsFlow = orders
@@ -144,10 +164,11 @@ export const getServerSideProps: GetServerSideProps = async ( { req, params }) =
     )
     .map( item => ({
       id: item.Produto,
-      data: { label: `${item.Produto} ${item.Descricao}` },
+      data: { label: `${item.Produto} ${item.Descricao} [${item.Tipo}-${item.CC}] ${item.AnoMes}` },
       position: { x: 0, y: 0 },
-      style: { background: `${backgroundNodeColor(item.CC)}`, color: '#333'},
+      style: { background: `${backgroundNodeColor(item.CC)}`, color: '#ffffff'},
     }))
+    //remove duplicates
     .reduce((acc, current) => {
       const x = acc.find(item => item.id === current.id);
       if (!x) {
@@ -164,12 +185,14 @@ export const getServerSideProps: GetServerSideProps = async ( { req, params }) =
       source: item.Produto,
       target: item.ProdOP,
       animated: true,
-      type: 'smoothstep',
+      //type: 'smoothstep',
+      arrowHeadType: "arrowclosed",
     }));
 
   return {
     props: {
-      elementsFlow: [...elementsFlow, ...edgeFlow]
+      elementsFlow: [...elementsFlow, ...edgeFlow],
+      yearMonth: `${year}-${month}`
     }
   }
 }
