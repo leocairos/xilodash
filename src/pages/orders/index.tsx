@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef  } from 'react';
 import ReactFlow, {
+  useZoomPanHelper,
   ReactFlowProvider,
   addEdge,
   removeElements,
@@ -12,9 +13,10 @@ import ReactFlow, {
   MiniMap,
   NodeExtent,
   Position,
-  XYPosition
+  XYPosition,
 } from 'react-flow-renderer';
 import dagre from 'dagre';
+import ReactToPrint from 'react-to-print';
 
 const position: XYPosition = { x: 0, y: 0 };
 //import initialElements from './initial-elements';
@@ -29,7 +31,6 @@ const initialElements = [
 
 import styles from './styles.module.scss';
 import { api } from '../../services/api'
-import { GetServerSideProps } from 'next';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -56,19 +57,124 @@ interface IOrderSummary {
   GGF: number;
 }
 
-interface IPropsLayoutFlow {
-  elementsFlow: Elements;
-  yearMonth: string;
+const onElementClick = (event, element) => console.log('click', element);
+
+const backgroundNodeColor = (centroCusto: string) => {
+  switch (centroCusto.substr(0, 3)) {
+    case '031': return  '#90CDF4'; //Mineracao 031
+    case '032': return  '#4299E1'; //Tratamento de Minerio 032
+    case '033': return  '#2B6CB0'; //Moagem de Talco 033
+    case '034': return  '#385072'; //Moagem de Magnesita 034
+    case '036': return  '#0BC5EA'; //Forno MHF 036
+  }
 }
 
-const LayoutFlow = ({elementsFlow, yearMonth}: IPropsLayoutFlow) => {
+const LayoutFlow = () => {
+  const componentRef = useRef();
+
   const [elements, setElements] = useState<Elements>(initialElements);
+  const [ periods, setPeriods ] = useState(['']);
+  const [ activePeriod, setActivePeriod ] = useState(-1);
+
   const onConnect = (params: Connection | Edge) => setElements((els) => addEdge(params, els));
   const onElementsRemove = (elementsToRemove: Elements) => setElements((els) => removeElements(elementsToRemove, els));
 
+  const numberFormat = (number: number) => (
+    new Intl.NumberFormat('pt-BR').format(number)
+  )
+
+  const currencyFormat = (number: number) => (
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(number)
+  )
+
+  const myLabel = (item: IOrderSummary) => {
+    return (
+      <>
+        [{item.Tipo}] {item.Produto} {item.Descricao} <br/>
+        <a href='#'  style={ {color: '#be2'}}>{item.CC} </a> {item.AnoMes} <br/>
+        Qtde: {numberFormat(item.Qtde)} |
+        CM: {currencyFormat(item.CustUnit)} |
+        Total: {currencyFormat(item.CustoTotal)} <br/>
+        MAT: {currencyFormat(item.Material)} |
+        MO: {currencyFormat(item.MaoDeObra)} |
+        GGF: {currencyFormat(item.GGF)}
+      </>)
+  }
+
+  const loadOrders = async (yearMonth: string) => {
+
+    const {resumoOPList} = await (await api.get(`/order?anoMes=${yearMonth}`)).data;
+
+    const orders = resumoOPList as IOrderSummary[]
+    const elementsFlow = orders
+      .filter(
+        item => ['PA', 'PI', 'MP'].includes(item.Tipo),
+      )
+      .map( item => ({
+        id: item.Produto,
+        data: { label: myLabel(item) },
+        position: { x: 0, y: 0 },
+        style: {
+          width: '20rem',
+          background: `${backgroundNodeColor(item.CC)}`,
+          color: '#ffffff',
+          border: `${item.Tipo === 'PA' ? '4px solid #b43a3a' : '2px solid #4759c0'}`
+        },
+      }))
+      //remove duplicates
+      .reduce((acc, current) => {
+        const x = acc.find(item => item.id === current.id);
+        if (!x) {
+          return acc.concat([current]);
+        } else {
+          return acc;
+        }
+      }, []);
+
+    const edgeFlow = orders
+      .filter(order => ['PA', 'PI', 'MP'].includes(order.Tipo))
+      .map( item => ({
+        id: `${item.Produto} to ${item.ProdOP}`,
+        source: item.Produto,
+        target: item.ProdOP,
+        animated: true,
+        //label: `${item.Produto} -> ${item.ProdOP}`,
+        //type: 'smoothstep',
+        arrowHeadType: "arrowclosed",
+        style: {
+          stroke: '#4759c0' ,
+        },
+      }))
+      //remove duplicates
+      .reduce((acc, current) => {
+        const x = acc.find(item => item.id === current.id);
+        if (!x) {
+          return acc.concat([current]);
+        } else {
+          return acc;
+        }
+      }, []);
+
+      setElements([...elementsFlow, ...edgeFlow])
+  }
+
+  async function loadPeriods() {
+    const response = await api.get(`/last-balance`);
+    const { lastsPeriods } = await response.data;
+    setPeriods(lastsPeriods);
+    setActivePeriod(0);
+    loadOrders(periods[activePeriod])
+  }
+
   useEffect( () => {
-      setElements(elementsFlow)
+    loadPeriods();
   },[])
+
+  useEffect( () => {
+    loadOrders(periods[activePeriod]);
+    onLayout('TB');
+  },[activePeriod])
+
 
   const onLayout = (direction: string) => {
     const isHorizontal = direction === 'LR';
@@ -76,7 +182,7 @@ const LayoutFlow = ({elementsFlow, yearMonth}: IPropsLayoutFlow) => {
 
     elements.forEach((el) => {
       if (isNode(el)) {
-        dagreGraph.setNode(el.id, { width: 250, height: 250 });
+        dagreGraph.setNode(el.id, { width: 500, height: 500 });
       } else {
         dagreGraph.setEdge(el.source, el.target);
       }
@@ -98,104 +204,56 @@ const LayoutFlow = ({elementsFlow, yearMonth}: IPropsLayoutFlow) => {
     });
 
     setElements(layoutedElements);
+
   };
 
-  const graphStyles = { width: "100%", height: "650px" };
+  const graphStyles = { width: "100%", height: "90vh" };
 
   return (
     <div className={styles.layoutflow}>
-      <ReactFlowProvider>
+
+      <ReactFlowProvider >
         <ReactFlow
+          ref={componentRef}
           elements={elements}
           onConnect={onConnect}
+          elementsSelectable={true}
           onElementsRemove={onElementsRemove}
+          onElementClick={onElementClick }
           nodeExtent={nodeExtent}
           style={graphStyles}
           onLoad={() => onLayout('TB')}
+          maxZoom={5}
+          minZoom={0.1}
         >
           <Controls />
-          <MiniMap />
-          <Background />
+          { /*<MiniMap /> */ }
+          { /*<Background /> */}
         </ReactFlow>
         <div className={styles.controls}>
-          Período: <button style={{ marginRight: 10 }}>{`<`}</button>
-          {yearMonth}
-          <button style={{ marginRight: 10, marginLeft: 10 }}>{`>`}</button>
-          <button onClick={() => onLayout('TB')} style={{ marginRight: 10 }}>
-            vertical layout
+          Período:
+          { activePeriod < 11 &&
+            <button onClick={()=>setActivePeriod(activePeriod+1)} style={{ marginLeft: 10, marginRight: 10 }}>{`<`}</button>
+          }
+          { periods[activePeriod] ?
+            `${periods[activePeriod].substr(4,2)}/${periods[activePeriod].substr(0,4)}`
+            : ``
+          }
+          { activePeriod > 0 &&
+            <button onClick={()=>setActivePeriod(activePeriod-1)}style={{ marginRight: 10, marginLeft: 10 }}>{`>`}</button>
+          }
+          <button onClick={() => onLayout('TB')} style={{ marginLeft: 10, marginRight: 10 }}>
+            vertical
           </button>
-          <button onClick={() => onLayout('LR')}>horizontal layout</button>
+          <button onClick={() => onLayout('LR')} style={{ marginRight: 10 }} >horizontal</button>
+          <ReactToPrint
+            trigger={() => <button>Print</button>}
+            content={() => componentRef.current}
+          />
         </div>
       </ReactFlowProvider>
     </div>
   );
 };
-
-const backgroundNodeColor = (centroCusto: string) => {
-  switch (centroCusto.substr(0, 3)) {
-    case '031': return  '#90CDF4'; //Mineracao 031
-    case '032': return  '#4299E1'; //Tratamento de Minerio 032
-    case '033': return  '#2B6CB0'; //Moagem de Talco 033
-    case '034': return  '#385072'; //Moagem de Magnesita 034
-    case '036': return  '#0BC5EA'; //Forno MHF 036
-  }
-}
-
-export const getServerSideProps: GetServerSideProps = async ( { req, params }) => {
-  var dateQuery = new Date();
-  var resumoOPList = [];
-  var month = String(dateQuery.getMonth() + 1).padStart(2, '0')
-  var year = dateQuery.getFullYear();
-
-  while (resumoOPList.length<1) {
-    const response = await api.get(`/order?anoMes=${year}${month}`);
-    resumoOPList = response.data.resumoOPList;
-    if (resumoOPList.length<1) {
-      dateQuery = new Date(dateQuery.setMonth(dateQuery.getMonth() - 1));
-      month = String(dateQuery.getMonth() + 1).padStart(2, '0');
-      year = dateQuery.getFullYear();
-    }
-  }
-
-  const orders = resumoOPList as IOrderSummary[]
-  const elementsFlow = orders
-    .filter(
-      item => ['PA', 'PI', 'MP'].includes(item.Tipo),
-    )
-    .map( item => ({
-      id: item.Produto,
-      data: { label: `${item.Produto} ${item.Descricao} [${item.Tipo}-${item.CC}] ${item.AnoMes}` },
-      position: { x: 0, y: 0 },
-      style: { background: `${backgroundNodeColor(item.CC)}`, color: '#ffffff'},
-    }))
-    //remove duplicates
-    .reduce((acc, current) => {
-      const x = acc.find(item => item.id === current.id);
-      if (!x) {
-        return acc.concat([current]);
-      } else {
-        return acc;
-      }
-    }, []);
-
-  const edgeFlow = orders
-    .filter(order => ['PA', 'PI', 'MP'].includes(order.Tipo))
-    .map( item => ({
-      id: `${item.Produto} to ${item.ProdOP}`,
-      source: item.Produto,
-      target: item.ProdOP,
-      animated: true,
-      //type: 'smoothstep',
-      arrowHeadType: "arrowclosed",
-    }));
-
-  return {
-    props: {
-      elementsFlow: [...elementsFlow, ...edgeFlow],
-      yearMonth: `${year}-${month}`
-    }
-  }
-}
-
 
 export default LayoutFlow;
