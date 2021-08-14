@@ -8,9 +8,6 @@ export function Header(){
         <img src="/images/logo-full.svg" alt="xilodash" />
         <nav>
           <ActiveLink activeClassName={styles.active} href="/">
-            <a>Home</a>
-          </ActiveLink>
-          <ActiveLink activeClassName={styles.active} href="/orders">
             <a>Ordens de Produção</a>
           </ActiveLink>
         </nav>
