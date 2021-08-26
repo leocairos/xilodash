@@ -26,11 +26,12 @@ export const borderNodeColor = (centroCusto: string, tipo: string, produto: stri
     : tipo === 'PA'
       ? '4px double'
       : '2px solid'}`;
-  switch (centroCusto.substr(0, 3)) {
-    case '031': return  `${borderStyle} #4584ac`; //Mineracao 031
-    case '032': return  `${borderStyle} #4584ac`; //Tratamento de Minerio 032
-    case '033': return  `${borderStyle} #1014ec`; //Moagem de Talco 033
-    case '034': return  `${borderStyle} #383838`; //Moagem de Magnesita 034
-    case '036': return  `${borderStyle} #6d3c15`; //Forno MHF 036
-  }
+  return `${borderStyle} #fff`;
+  // switch (centroCusto.substr(0, 3)) {
+  //   case '031': return  `${borderStyle} #4584ac`; //Mineracao 031
+  //   case '032': return  `${borderStyle} #4584ac`; //Tratamento de Minerio 032
+  //   case '033': return  `${borderStyle} #1014ec`; //Moagem de Talco 033
+  //   case '034': return  `${borderStyle} #383838`; //Moagem de Magnesita 034
+  //   case '036': return  `${borderStyle} #6d3c15`; //Forno MHF 036
+  // }
 }

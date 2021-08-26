@@ -83,7 +83,26 @@ const OrderDetail = (item: IOrderSummary) => {
           <PopoverCloseButton />
           <PopoverBody>
 
-            {JSON.stringify(item.detail)}
+            {/* {JSON.stringify(item.detail)} */}
+            <table >
+              <thead>
+                <th>Componente</th>
+                <th>Descrição</th>
+                <th>Qtde</th>
+                <th>Custo</th>
+              </thead>
+              <tbody>
+                {(item.detail.map(comp => (
+                  <tr id={item.Produto}>
+                    <td>{comp.Produto}</td>
+                    <td>{comp.Descricao}</td>
+                    <td>{numberFormat(comp.Qtde)}</td>
+                    <td>{currencyFormat(comp.CustoTotal)}</td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
+
           </PopoverBody>
           <PopoverFooter>
             Produção: {numberFormat(qtde)} kg | CM: {currencyFormat(item.CustUnit)}

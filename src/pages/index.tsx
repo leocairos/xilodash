@@ -15,6 +15,7 @@ import ReactFlow, {
   Position,
   XYPosition,
 } from 'react-flow-renderer';
+
 import dagre from 'dagre';
 import { FiPrinter, FiChevronLeft, FiChevronRight } from "react-icons/fi";
 import ReactToPrint from 'react-to-print';
@@ -36,6 +37,7 @@ import { OrderDetail } from '../components/OrderDetail';
 
 import { GiVerticalFlip, GiHorizontalFlip } from "react-icons/gi";
 import { api } from '../services/api';
+import Sidebar from '../components/Sidebar';
 
 const dagreGraph = new dagre.graphlib.Graph();
 dagreGraph.setDefaultEdgeLabel(() => ({}));
@@ -45,6 +47,7 @@ const OrderFlow = () => {
 
   const [elements, setElements] = useState<Elements>(initialElements);
   const [ periods, setPeriods ] = useState(['']);
+  const [ products, setProducts ] = useState([]);
   const [ activePeriod, setActivePeriod ] = useState(-1);
 
   const onConnect = (params: Connection | Edge) => setElements((els) => addEdge(params, els));
@@ -55,7 +58,7 @@ const OrderFlow = () => {
 
   const loadOrders = async (yearMonth: string) => {
 
-    const {resumoOPList} = await (await api.get(`/order?anoMes=${yearMonth}`)).data;
+    const { resumoOPList } = await (await api.get(`/order?anoMes=${yearMonth}`)).data;
 
     const orders = resumoOPList as IOrderSummary[]
     const MOandGGF = orders
@@ -72,6 +75,11 @@ const OrderFlow = () => {
       );
 
     const elementsFlow = orders
+      // .filter( item => (
+      //   products.length > 0
+      //     ? item.Produto.substr(0,3) !== '018'
+      //     : item.Produto
+      // ))
       .filter(item => ['PA', 'PI', 'MP'].includes(item.Tipo))
       .map(
         item => {
@@ -131,8 +139,14 @@ const OrderFlow = () => {
         }
       }, []);
 
+    //console.log('elementsFlow', elementsFlow)
     const edgeFlow = orders
       .filter(order => ['PA', 'PI', 'MP'].includes(order.Tipo))
+      // .filter( item => (
+      //   products.length > 0
+      //     ? item.ProdOP.substr(0,3) === '018'
+      //     : item.ProdOP
+      // ))
       .map( item => ({
         id: `${item.Produto} to ${item.ProdOP}`,
         source: item.Produto,
@@ -160,8 +174,8 @@ const OrderFlow = () => {
 
   async function loadPeriods() {
     const response = await api.get(`/last-balance`);
-    const { lastsPeriods } = await response.data;
-    setPeriods(lastsPeriods);
+    const { lastAllPeriods } = await response.data;
+    setPeriods(lastAllPeriods);
     setActivePeriod(0);
     loadOrders(periods[activePeriod])
   }
@@ -169,6 +183,11 @@ const OrderFlow = () => {
   useEffect( () => {
     loadPeriods();
   },[])
+
+  useEffect( () => {
+    loadOrders(periods[activePeriod]);
+    onLayout('TB');
+  },[products])
 
   useEffect( () => {
     loadOrders(periods[activePeriod]);
@@ -213,6 +232,7 @@ const OrderFlow = () => {
     <div className={styles.layoutflow}>
 
       <ReactFlowProvider >
+        <Sidebar />
         <ReactFlow
           ref={componentRef}
           elements={elements}
@@ -246,6 +266,9 @@ const OrderFlow = () => {
             <GiVerticalFlip/>
           </button>
           <button onClick={() => onLayout('LR')} style={{ marginRight: 10 }} ><GiHorizontalFlip/></button>
+          <button onClick={() => setProducts(['018'])} style={{ marginRight: 10 }} >
+            Filter
+          </button>
           <ReactToPrint
             trigger={() => <button><FiPrinter/></button>}
             content={() => componentRef.current}
